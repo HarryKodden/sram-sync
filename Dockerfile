@@ -17,4 +17,4 @@ ADD bootstrap.sh /opt
 RUN chmod +x /opt/bootstrap.sh
 
 VOLUME ["/input", "/output"]
-ENTRYPOINT [ "/opt/bootstrap.sh" ]
+CMD [ "/opt/bootstrap.sh" ]

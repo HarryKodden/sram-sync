@@ -20,7 +20,7 @@ from irods_helper import get_all_avus, set_singular_avu, get_irods_connection
 from ldap_helper import get_ldap_connection, for_ldap_entries_do, read_ldap_attribute
 
 # Setup logging
-log_level = os.environ['LOG_LEVEL']
+log_level = os.environ.get('LOG_LEVEL', 'ERROR')
 logging.basicConfig(level=logging.getLevelName(log_level), format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger('root')
 
@@ -58,7 +58,7 @@ IRODS_USER = os.environ['IRODS_USER']
 IRODS_PASS = os.environ['IRODS_PASS']
 
 IRODS_PORT = 1247
-IRODS_ZONE = "nlmumc"
+IRODS_ZONE = os.environ.get('IRODS_ZONE',"nlmumc")
 
 # irods groups and users with this AVU should not be synchronized (i.e. service-accounts, DH-ingest, ...)
 LDAP_SYNC_AVU = 'ldapSync'
