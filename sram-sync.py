@@ -12,7 +12,7 @@ import ldap
 
 from irods.column import Criterion
 from irods.exception import PycommandsException, iRODSException, UserDoesNotExist, UserGroupDoesNotExist, \
-    CATALOG_ALREADY_HAS_ITEM_BY_THAT_NAME
+    CAT_INVALID_GROUP, CATALOG_ALREADY_HAS_ITEM_BY_THAT_NAME 
 from irods.models import User, UserGroup
 from irods.user import iRODSUser, iRODSUserGroup
 
@@ -472,9 +472,9 @@ def get_ldap_groups(l, group_key_2_co):
 
 
 ##########################################################
-def add_user_to_group(sess, group_name, user_name):
-    irods_group = sess.user_groups.get(group_name)
+def add_user_to_group(sess, group_name, user_name):    
     try:
+        irods_group = sess.user_groups.get(group_name)
         irods_group.addmember(user_name)
         logger.info("-- User: " + user_name + " added to group " + group_name)
     except CATALOG_ALREADY_HAS_ITEM_BY_THAT_NAME:
@@ -485,8 +485,8 @@ def add_user_to_group(sess, group_name, user_name):
 
 ########################################################## 
 def remove_user_from_group(sess, group_name, user_name):
-    irods_group = sess.user_groups.get(group_name)
     try:
+        irods_group = sess.user_groups.get(group_name)
         irods_group.removemember(user_name)
         logger.info("-- User: " + user_name + " removed from group " + group_name)
     # TO DO: This should not catch all exceptions!
@@ -657,4 +657,4 @@ if __name__ == "__main__":
         sys.exit(exit_code)
     finally:
         # Perform any clean up of connections on closing here
-        logger.info("Exiting")
+        log
