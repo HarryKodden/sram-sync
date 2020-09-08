@@ -666,7 +666,9 @@ if __name__ == "__main__":
         exit_code = main(not settings.commit)
         if settings.scheduled:
             while True:
-                time.sleep(os.environ.get('SLEEP_INTERVAL_MINUTES', SLEEP_INTERVAL_MINUTES) * 60)
+                seconds = int(float(os.environ.get('SLEEP_INTERVAL_MINUTES', SLEEP_INTERVAL_MINUTES)) * 60)
+                logger.info("Sleeping for {} seconds".format(seconds))
+                time.sleep(seconds)
                 main(not settings.commit)
         sys.exit(exit_code)
     finally:

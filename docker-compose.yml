@@ -1,0 +1,148 @@
+version: '2'
+
+volumes:
+
+  irods_database:
+    driver: local
+  irods_config:
+    driver: local
+  metalnx_database:
+    driver: local
+
+services:
+
+  db_irods:
+    image: postgres
+    hostname: $IRODS_DB_HOST
+    volumes:
+      - irods_database:/var/lib/postgresql/data
+      - ./etc/irods/pgs_init.sh:/docker-entrypoint-initdb.d/setup-my-schema.sh:ro
+    environment:
+      MY_DB: ${IRODS_DB_NAME}
+      MY_USER: ${IRODS_DB_USER}
+      MY_PASSWORD: ${IRODS_DB_PASS}
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: postgres
+
+  irods:
+    build:
+      context: irods
+      dockerfile: Dockerfile
+      args:
+        IRODS_USER: ${IRODS_USER}
+        IRODS_SERVICE_PORT: ${IRODS_SERVICE_PORT}
+        IRODS_CONTROL_PORT: ${IRODS_CONTROL_PORT}
+        IRODS_RANGE_FROM: ${IRODS_RANGE_FROM}
+        IRODS_RANGE_TILL: ${IRODS_RANGE_TILL}
+    hostname: ${IRODS_HOST}
+    volumes:
+      - irods_config:/var/lib/irods
+      - ./etc/irods/cert:/etc/irods/ssl
+    depends_on:
+      - db_irods
+    environment:
+      DATABASE_TYPE: "postgres"
+      IRODS_DB_HOST: ${IRODS_DB_HOST}
+      IRODS_DB_NAME: ${IRODS_DB_NAME}
+      IRODS_DB_PORT: ${IRODS_DB_PORT}
+      IRODS_DB_USER: ${IRODS_DB_USER}
+      IRODS_DB_PASS: ${IRODS_DB_PASS}
+      IRODS_SERVICE_PORT: ${IRODS_SERVICE_PORT}
+      IRODS_CONTROL_PORT: ${IRODS_CONTROL_PORT}
+      IRODS_RANGE_FROM: ${IRODS_RANGE_FROM}
+      IRODS_RANGE_TILL: ${IRODS_RANGE_TILL}
+      IRODS_HOST: ${IRODS_HOST}
+      IRODS_ZONE: ${IRODS_ZONE}
+      IRODS_USER: ${IRODS_USER}
+      IRODS_PASS: ${IRODS_PASS}
+      IRODS_SERVICE_NAME: ${IRODS_SERVICE_NAME}
+      IRODS_SERVICE_GROUP: ${IRODS_SERVICE_GROUP}
+      LDAP_HOST: ${TEST_LDAP_HOST}
+      LDAP_BASE_DN: ${TEST_LDAP_BASE_DN}
+      LDAP_BIND_DN: "cn=admin,${TEST_LDAP_BASE_DN}"
+      LDAP_FILTER: "*"
+      LDAP_PASS: ${TEST_LDAP_PASSWORD}
+      PAM_OTP_UID: ${PAM_OTP_UID}
+      PAM_OTP_TTL: ${PAM_OTP_TTL}
+      PAM_OTP_DEBUG: ${PAM_OTP_DEBUG}
+
+  db_metalnx:
+    image: postgres
+    hostname: $METALNX_DB_HOST
+    volumes:
+      - metalnx_database:/var/lib/postgresql/data
+      - ./etc/irods/pgs_init.sh:/docker-entrypoint-initdb.d/setup-my-schema.sh:ro
+    environment:
+      MY_DB: ${METALNX_DB_NAME}
+      MY_USER: ${METALNX_DB_USER}
+      MY_PASSWORD: ${METALNX_DB_PASS}
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: postgres
+
+  metalnx:
+    build: metalnx
+    volumes:
+      - ./etc/irods/irods-ext:/etc/irods-ext
+      - ./etc/irods/cert/irods.crt:/etc/ssl/irods.crt:ro
+    links:
+      - db_metalnx
+      - irods
+    environment:
+      IRODS_HOST: ${IRODS_HOST}
+      IRODS_PORT: ${IRODS_SERVICE_PORT}
+      IRODS_ZONE: ${IRODS_ZONE}
+      IRODS_USER: ${IRODS_USER}
+      IRODS_PASS: ${IRODS_PASS}
+      IRODS_AUTH: ${IRODS_AUTH}
+      DB_HOST: ${METALNX_DB_HOST}
+      DB_PORT: ${METALNX_DB_PORT}
+      DB_NAME: ${METALNX_DB_NAME}
+      DB_USER: ${METALNX_DB_USER}
+      DB_PASS: ${METALNX_DB_PASS}
+    ports:
+      - "8081:8080"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        echo 'Starting metalnx...'
+        keytool -import -trustcacerts -keystore /usr/lib/jvm/default-jvm/jre/lib/security/cacerts -storepass changeit -noprompt -alias mycert -file /etc/ssl/irods.crt
+        /usr/bin/envsubst </etc/irods-ext/metalnx.properties.env >/etc/irods-ext/metalnx.properties
+        cat /etc/irods-ext/metalnx.properties
+        catalina.sh run 2>&1 >/dev/null
+
+  sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      LDAP_HOST: ${TEST_LDAP_HOST}
+      LDAP_USER: "cn=admin,${TEST_LDAP_BASE_DN}"
+      LDAP_PASS: ${TEST_LDAP_PASSWORD}
+      LDAP_USERS_BASE_DN: "ou=People,dc=flat,${TEST_LDAP_BASE_DN}"
+      LDAP_GROUPS_BASE_DN: "ou=Groups,dc=flat,${TEST_LDAP_BASE_DN}"
+      LDAP_COS_BASE_DN: dc=flat,${TEST_LDAP_BASE_DN}
+      LOG_LEVEL: INFO
+      SYNC_USERS: "True"
+      DELETE_USERS: "True"
+      DELETE_USERS_LIMIT: "100"
+      SYNC_GROUPS: "True"
+      DELETE_GROUPS: "True"
+      DEFAULT_USER_PASSWORD: smurf
+      IRODS_HOST: irods
+      IRODS_USER: ${IRODS_USER}
+      IRODS_PASS: ${IRODS_PASS}
+      IRODS_ZONE: ${IRODS_ZONE}
+      SLEEP_INTERVAL_MINUTES: 1
+    volumes:
+      - "${PWD}/irods_helper.py:/opt/app/irods_helper.py:ro"
+      - "${PWD}/ldap_helper.py:/opt/app/ldap_helper.py:ro"
+      - "${PWD}/sram-sync.py:/opt/app/sram_sync.py:ro"
+    links:
+      - irods
+#   command:
+#     - /bin/sh
+#     - -c
+#     - |
+#       echo 'Starting sync (suspended)'
+#       tail -f /dev/null
