@@ -34,7 +34,8 @@ def for_ldap_entries_do( c, base_dn, search_filter, retrieve_attributes, callbac
             entry = result[0][1]
             if entry:
                 function_result = callback(entry)
-                return_array.append(function_result)
+                if function_result:
+                    return_array.append(function_result)
         result_type, result = c.result(id, all=0)
     return return_array
 

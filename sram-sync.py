@@ -42,10 +42,9 @@ LDAP_HOST = os.environ['LDAP_HOST']
 LDAP_USERS_BASE_DN = os.environ['LDAP_USERS_BASE_DN']
 LDAP_GROUPS_BASE_DN = os.environ['LDAP_GROUPS_BASE_DN']
 
-LDAP_SERVICE_PREFIX = "datahubmaastricht:"
 LDAP_USERS_SEARCH_FILTER = "(objectClass=person)"
-LDAP_GROUPS_SEARCH_FILTER = "(objectClass=posixGroup)"
-LDAP_GROUP_MEMBER_ATTR = 'sczMember'
+LDAP_GROUPS_SEARCH_FILTER = "(objectClass=groupOfNames)"
+LDAP_GROUP_MEMBER_ATTR = 'member'
 
 LDAP_COS_BASE_DN = os.environ['LDAP_COS_BASE_DN']
 LDAP_COS_SEARCH_FILTER = "(objectClass=organization)"
@@ -236,17 +235,27 @@ class LdapGroup:
     @classmethod
     def create_for_ldap_entry(cls, ldap_entry):
         group_name = read_ldap_attribute(ldap_entry, 'cn')
+
+        # Focus on CO groups only.
+        # If we need to sync other groups as well, we need to adjust for the ':' character,
+        # since iRODS will fail on groupnames with that character!
+
+        if len(group_name.split(':')) > 1:
+            return None
+
         # get us an array of all member-attributes, which contains
         # DNs: [ b'cn=empty-membership-placeholder',  b'uid=p.vanschayck@maastrichtuniversity.nl,ou=users,dc=datahubmaastricht,dc=nl', ...]
         group_member_dns = ldap_entry.get(LDAP_GROUP_MEMBER_ATTR, [b""])
         group_member_uids = list(
             filter(lambda x: x is not None, map(LdapGroup.get_group_member_uids, group_member_dns)))
+        
         return LdapGroup(group_name, group_member_uids)
 
     # ---
     def create_new_group(self, irods_session, dry_run):
         if dry_run:
             return
+        logger.info("Creating group: {}".format(self.group_name))
         new_group = irods_session.user_groups.create(self.group_name)
         if self.display_name:
             new_group.metadata.add(GroupAVU.DISPLAY_NAME.value, self.display_name)
@@ -465,8 +474,9 @@ def get_ldap_groups(l, group_key_2_co):
 
     for group in ldap_groups:
         # dangerous: by
+        logger.info("LDAP Group: {}".format(group.group_name))
         co_key = group.group_name.split(":")[0]
-        group_name_2_groups[group.group_name] = group
+        group_name_2_groups[co_key] = group
 
     return group_name_2_groups
 
@@ -477,6 +487,8 @@ def add_user_to_group(sess, group_name, user_name):
         irods_group = sess.user_groups.get(group_name)
         irods_group.addmember(user_name)
         logger.info("-- User: " + user_name + " added to group " + group_name)
+    except UserGroupDoesNotExist:
+        logger.error("-- Group {} does not exist".format(group_name))
     except CATALOG_ALREADY_HAS_ITEM_BY_THAT_NAME:
         logger.info("-- User {} already in group {} ".format(user_name, group_name))
     except (PycommandsException, iRODSException) as e:
@@ -643,6 +655,8 @@ def sigterm_handler(_signal, _stack_frame):
     sys.exit(0)
 
 
+SLEEP_INTERVAL_MINUTES=5
+
 if __name__ == "__main__":
     # Handle the SIGTERM signal from Docker
     signal.signal(signal.SIGTERM, sigterm_handler)
@@ -652,9 +666,9 @@ if __name__ == "__main__":
         exit_code = main(not settings.commit)
         if settings.scheduled:
             while True:
-                time.sleep(5 * 60)
+                time.sleep(os.environ.get('SLEEP_INTERVAL_MINUTES', SLEEP_INTERVAL_MINUTES) * 60)
                 main(not settings.commit)
         sys.exit(exit_code)
     finally:
         # Perform any clean up of connections on closing here
-        log
+        logger.info("Exiting")

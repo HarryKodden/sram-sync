@@ -7,7 +7,7 @@ from irods.meta import iRODSMeta
 from irods.session import iRODSSession
 
 # Setup logging
-log_level = os.environ.get('LOG_LEVEL', 'DEBUG')
+log_level = os.environ.get('LOG_LEVEL', 'ERROR')
 logging.basicConfig(level=logging.getLevelName(log_level), format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger('root')
 
